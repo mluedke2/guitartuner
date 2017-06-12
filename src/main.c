@@ -18,9 +18,10 @@
 #include <signal.h>
 #include "libfft.h"
 #include <portaudio.h>
+#include <curl/curl.h>
 
 /* -- some basic parameters -- */
-#define SAMPLE_RATE (8000)
+#define SAMPLE_RATE (20000)
 #define FFT_SIZE (8192)
 #define FFT_EXP_SIZE (13)
 #define NUM_SECONDS (20)
@@ -36,6 +37,11 @@ float processSecondOrderFilter( float x, float *mem, float *a, float *b );
 void signalHandler( int signum ) ;
 
 static bool running = true;
+
+static bool donePut = false;
+
+static int correctNotes = 0;
+static int wrongNotes = 0;
 
 static char * NOTES[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
@@ -194,6 +200,87 @@ int main( int argc, char **argv ) {
       printf( "Tuner listening. Control-C to exit.\n" );
       printf( "%f Hz, %d : %f\n", freq, maxIndex, maxVal*1000 );
       printf( "Nearest Note: %s\n", nearestNoteName );
+
+      if( !donePut ) {
+
+        if ( correctNotes == 0 && *nearestNoteName == 'B' ) {
+          correctNotes = 1;
+          wrongNotes = 0;
+
+        } else if ( correctNotes == 1 ) {
+
+          if ( *nearestNoteName == 'E' ) {
+            correctNotes = 2;
+            wrongNotes = 0;
+          } else {
+            // if B was detected, the wrong notes would pile up here
+            // wrongNotes = wrongNotes + 1;
+          }
+
+        } else if ( correctNotes == 2 ) {
+
+          if ( *nearestNoteName == 'A' ) {
+            correctNotes = 3;
+            wrongNotes = 0;
+          } else {
+            wrongNotes = wrongNotes + 1;
+          }
+
+        } else if ( correctNotes == 3 ) {
+
+          if ( *nearestNoteName == 'D' ) {
+            correctNotes = 4;
+            wrongNotes = 0;
+          } else {
+            wrongNotes = wrongNotes + 1;
+          }
+
+        } else if ( correctNotes == 4 ) {
+
+          if ( *nearestNoteName == 'E' ) {
+            correctNotes = 5;
+            wrongNotes = 0;
+          } else {
+            wrongNotes = wrongNotes + 1;
+          }
+
+        } else if ( correctNotes == 5 ) {
+
+          if ( *nearestNoteName == 'D' ) {
+
+            CURL *curl = curl_easy_init();
+            CURLcode res;
+            struct curl_slist *headers = NULL;
+            if(curl) {
+               donePut = true;
+               headers = curl_slist_append(headers, "Authorization: Bearer YOUR_LIFX_API_TOKEN_HERE");
+               headers = curl_slist_append(headers, "Content-Type: application/json");
+
+               curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+               curl_easy_setopt(curl, CURLOPT_URL, "https://api.lifx.com/v1/lights/all/state");
+               curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
+
+               curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"power\":\"on\",\"color\":\"blue\"}");
+
+               res = curl_easy_perform(curl);
+
+               curl_slist_free_all(headers);
+               curl_easy_cleanup(curl);
+             }
+
+          } else {
+            wrongNotes = wrongNotes + 1;
+          }
+        }
+
+        if ( wrongNotes > 10 ) {
+          wrongNotes = 0;
+          correctNotes = 0;
+        }
+
+        printf( "correctNotes %d, wrongNotes %d \n", correctNotes, wrongNotes );
+      }
+
       if( nearestNoteDelta != 0 ) {
          if( centsSharp > 0 )
             printf( "%f cents sharp.\n", centsSharp );

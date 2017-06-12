@@ -10,7 +10,7 @@ LDFLAGS += $(shell pkg-config portaudio-2.0 --libs-only-L --libs-only-other)
 all: tuner
 
 tuner: $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS) -lcurl
 
 objs:
 	mkdir objs
